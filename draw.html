@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Создание полигона по изображению</title>
+  <style>
+    body {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
+    
+    #container {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-height: 80vh;
+      overflow: auto;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+    }
+
+    #image-container {
+      display: block;
+      width: 100%;
+      min-height: 500px;
+      text-align: center;
+    }
+
+    #image-container img {
+      max-width: 100%;
+      max-height: 70vh;
+      object-fit: contain;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+
+    #coords {
+      margin-top: 10px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+    }
+
+    #uploader {
+      margin-bottom: 20px;
+      padding: 10px;
+      border: 2px dashed #ccc;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    #xml-input-container {
+      margin-bottom: 20px;
+    }
+    
+    #xml-textarea {
+      width: 100%;
+      min-height: 150px;
+      font-family: monospace;
+      padding: 10px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    #svg-xml-container {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+    }
+    
+    #svg-xml {
+      padding: 10px;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+      max-height: 300px;
+      overflow: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    
+    .svg-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 500px;
+    }
+    
+    .svg-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      cursor: crosshair;
+    }
+    
+    .button {
+      padding: 8px 15px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+    
+    .button:hover {
+      background: #45a049;
+    }
+    
+    .controls {
+      margin-bottom: 15px;
+    }
+    
+    .coords-controls {
+      margin: 15px 0;
+    }
+    
+    .file-input-label {
+      display: block;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    
+    .tab-buttons {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    
+    .tab-button {
+      padding: 8px 15px;
+      background: #ddd;
+      border: none;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    
+    .tab-button.active {
+      background: #4CAF50;
+      color: white;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    /* Стили для сообщения о загрузке */
+    .upload-message {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 300px;
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Создание полигона по изображению</h1>
+
+<div class="tab-buttons">
+  <button class="tab-button active" data-tab="file-tab">Загрузить файл</button>
+  <button class="tab-button" data-tab="xml-tab">Вставить XML</button>
+</div>
+
+<div id="file-tab" class="tab-content active">
+  <label class="file-input-label" for="uploader">Выберите изображение (JPG, PNG, SVG):</label>
+  <input type="file" id="uploader" accept="image/*,.svg">
+</div>
+
+<div id="xml-tab" class="tab-content">
+  <div id="xml-input-container">
+    <label class="file-input-label" for="xml-textarea">Вставьте XML SVG:</label>
+    <textarea id="xml-textarea" placeholder="Вставьте XML код SVG здесь..."></textarea>
+  </div>
+  <button id="load-xml-button" class="button">Загрузить XML</button>
+</div>
+
+<div id="container">
+  <div id="image-container">
+    <div class="upload-message">Изображение появится здесь после выбора файла или загрузки XML</div>
+  </div>
+  <canvas id="canvas"></canvas>
+</div>
+<div class="coords-controls">
+  <button id="copy-coords-button" class="button">Копировать координаты</button>
+  <button id="clear-points-button" class="button" style="background: #f44336;">Очистить точки</button>
+</div>
+<pre id="coords">Координаты появятся здесь…</pre>
+<div id="svg-xml-container">
+  <div class="controls">
+    <button id="copy-button" class="button">Копировать XML</button>
+  </div>
+  <div id="svg-xml">XML SVG-файла появится здесь…</div>
+</div>
+
+<script>
+  const uploader = document.getElementById('uploader');
+const imageContainer = document.getElementById('image-container');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const coordsDisplay = document.getElementById('coords');
+const svgXmlDisplay = document.getElementById('svg-xml');
+const copyButton = document.getElementById('copy-button');
+const copyCoordsButton = document.getElementById('copy-coords-button');
+const clearPointsButton = document.getElementById('clear-points-button');
+const xmlTextarea = document.getElementById('xml-textarea');
+const loadXmlButton = document.getElementById('load-xml-button');
+const tabButtons = document.querySelectorAll('.tab-button');
+const tabContents = document.querySelectorAll('.tab-content');
+
+let points = [];
+let currentImageElement = null;
+let svgOverlay = null;
+let currentSvgXml = '';
+
+// Переключение между вкладками
+tabButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const tabId = button.getAttribute('data-tab');
+    
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+    
+    button.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+  });
+});
+
+// Загрузка из файла
+uploader.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  loadImageFromFile(file);
+});
+
+// Загрузка из XML текста
+loadXmlButton.addEventListener('click', () => {
+  const xmlText = xmlTextarea.value.trim();
+  if (!xmlText) {
+    alert('Пожалуйста, введите XML код SVG');
+    return;
+  }
+  
+  try {
+    const blob = new Blob([xmlText], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    
+    imageContainer.innerHTML = '';
+    points = [];
+    coordsDisplay.textContent = 'Координаты появятся здесь…';
+    svgXmlDisplay.textContent = 'XML SVG-файла появится здесь…';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    let cleanXmlText = xmlText.replace(/<\?xml version="1.0" \?>\n?/, '');
+    // Добавляем класс к SVG, если его нет
+    if (!cleanXmlText.includes('id="custom-polygon"')) {
+      cleanXmlText = cleanXmlText.replace(/<svg([^>]*)>/, '<svg$1 id="custom-polygon">');
+    }
+    currentSvgXml = cleanXmlText;
+    svgXmlDisplay.textContent = cleanXmlText;
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'svg-wrapper';
+    
+    const object = document.createElement('object');
+    object.type = 'image/svg+xml';
+    object.data = url;
+    object.style.width = '100%';
+    object.style.height = '100%';
+    
+    svgOverlay = document.createElement('div');
+    svgOverlay.className = 'svg-overlay';
+    
+    wrapper.appendChild(object);
+    wrapper.appendChild(svgOverlay);
+    imageContainer.appendChild(wrapper);
+    
+    object.onload = () => {
+      currentImageElement = object;
+      setTimeout(() => {
+        canvas.width = wrapper.clientWidth;
+        canvas.height = wrapper.clientHeight;
+      }, 50);
+    };
+    
+    svgOverlay.addEventListener('click', handleImageClick);
+    
+  } catch (error) {
+    svgXmlDisplay.textContent = 'Ошибка при обработке SVG: ' + error.message;
+  }
+});
+
+async function loadImageFromFile(file) {
+  imageContainer.innerHTML = '';
+  points = [];
+  coordsDisplay.textContent = 'Координаты появятся здесь…';
+  svgXmlDisplay.textContent = 'XML SVG-файла появится здесь…';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  if (file.name.endsWith('.svg') || file.type === 'image/svg+xml') {
+    try {
+      let text = await file.text();
+      
+      text = text.replace(/<\?xml version="1.0" \?>\n?/, '');
+      // Добавляем класс к SVG, если его нет
+      if (!text.includes('class="custom-polygon"')) {
+        text = text.replace(/<svg([^>]*)>/, '<svg$1 class="custom-polygon">');
+      }
+      currentSvgXml = text;
+      svgXmlDisplay.textContent = text;
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'svg-wrapper';
+      
+      const object = document.createElement('object');
+      object.type = 'image/svg+xml';
+      object.data = URL.createObjectURL(file);
+      object.style.width = '100%';
+      object.style.height = '100%';
+      
+      svgOverlay = document.createElement('div');
+      svgOverlay.className = 'svg-overlay';
+      
+      wrapper.appendChild(object);
+      wrapper.appendChild(svgOverlay);
+      imageContainer.appendChild(wrapper);
+      
+      object.onload = () => {
+        currentImageElement = object;
+        setTimeout(() => {
+          canvas.width = wrapper.clientWidth;
+          canvas.height = wrapper.clientHeight;
+        }, 50);
+      };
+      
+      svgOverlay.addEventListener('click', handleImageClick);
+      
+    } catch (error) {
+      svgXmlDisplay.textContent = 'Ошибка при чтении SVG файла: ' + error.message;
+    }
+  } else {
+    svgXmlDisplay.textContent = 'Загружен файл не SVG формата';
+    const img = document.createElement('img');
+    img.alt = 'Загруженное изображение';
+    
+    img.onload = () => {
+      currentImageElement = img;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      
+      const maxDisplayWidth = window.innerWidth * 0.8;
+      const maxDisplayHeight = window.innerHeight * 0.7;
+      
+      if (img.naturalWidth > maxDisplayWidth || img.naturalHeight > maxDisplayHeight) {
+        const ratio = Math.min(
+          maxDisplayWidth / img.naturalWidth,
+          maxDisplayHeight / img.naturalHeight
+        );
+        img.style.width = `${img.naturalWidth * ratio}px`;
+      } else {
+        img.style.width = `${img.naturalWidth}px`;
+      }
+    };
+    
+    img.src = URL.createObjectURL(file);
+    imageContainer.appendChild(img);
+    
+    img.addEventListener('click', handleImageClick);
+  }
+}
+
+copyButton.addEventListener('click', () => {
+  if (!currentSvgXml) return;
+  
+  navigator.clipboard.writeText(currentSvgXml)
+    .then(() => {
+      const originalText = copyButton.textContent;
+      copyButton.textContent = 'Скопировано!';
+      setTimeout(() => {
+        copyButton.textContent = originalText;
+      }, 2000);
+    })
+    .catch(err => {
+      console.error('Ошибка копирования: ', err);
+    });
+});
+
+copyCoordsButton.addEventListener('click', () => {
+  if (points.length === 0) {
+    alert('Нет координат для копирования!');
+    return;
+  }
+  
+  const coordText = points.map(p => `${p.x},${p.y}`).join(' ');
+  const textToCopy = `${coordText}`;
+  
+  navigator.clipboard.writeText(textToCopy)
+    .then(() => {
+      copyCoordsButton.textContent = 'Скопировано!';
+      setTimeout(() => {
+        copyCoordsButton.textContent = 'Копировать координаты';
+      }, 2000);
+    })
+    .catch(err => {
+      console.error('Ошибка копирования:', err);
+      alert('Ошибка копирования!');
+    });
+});
+
+clearPointsButton.addEventListener('click', () => {
+  points = [];
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  coordsDisplay.textContent = 'Координаты очищены';
+  svgXmlDisplay.textContent = 'XML SVG-файла появится здесь…';
+});
+
+function handleImageClick(e) {
+  if (!currentImageElement) return;
+  
+  let rect;
+  let width, height;
+  
+  if (currentImageElement.tagName === 'OBJECT') {
+    rect = currentImageElement.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+  } else {
+    rect = currentImageElement.getBoundingClientRect();
+    width = currentImageElement.naturalWidth;
+    height = currentImageElement.naturalHeight;
+    
+    const scaleX = width / currentImageElement.clientWidth;
+    const scaleY = height / currentImageElement.clientHeight;
+  }
+  
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  let percentX, percentY;
+  if (currentImageElement.tagName === 'IMG') {
+    const scaleX = currentImageElement.naturalWidth / currentImageElement.clientWidth;
+    const scaleY = currentImageElement.naturalHeight / currentImageElement.clientHeight;
+    percentX = (x * scaleX / width).toFixed(4);
+    percentY = (y * scaleY / height).toFixed(4);
+  } else {
+    percentX = (x / width).toFixed(4);
+    percentY = (y / height).toFixed(4);
+  }
+  
+  points.push({ x: percentX, y: percentY });
+  drawPolygon();
+  showCoords();
+}
+
+function drawPolygon() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (points.length < 1) return;
+  
+  if (points.length >= 2) {
+    ctx.beginPath();
+    ctx.moveTo(points[0].x * canvas.width, points[0].y * canvas.height);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x * canvas.width, points[i].y * canvas.height);
+    }
+    ctx.strokeStyle = '#34eb46';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  
+  points.forEach(point => {
+    ctx.beginPath();
+    ctx.arc(point.x * canvas.width, point.y * canvas.height, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#34eb46';
+    ctx.fill();
+  });
+}
+
+function showCoords() {
+  const coordPairs = points.map((p, i) => `${p.x}, ${p.y}`);
+  coordsDisplay.textContent = 'Координаты полигона:\n' + coordPairs.join(' ');
+}
+</script>
+
+</body>
+</html>
